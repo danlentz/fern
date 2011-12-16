@@ -4,7 +4,7 @@
 (in-package :cl-user)
 
 (defpackage :fern
-  (:shadow :get :map :values)
+  (:shadow :get :map)
   (:use :common-lisp :unicly)
   (:export
     :arc

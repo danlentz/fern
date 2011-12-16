@@ -16,31 +16,29 @@
 
 (defgeneric arc (thing)  
   (:method ((uuid unique-universal-identifier))
-    (coerce (uuid-to-bit-vector uuid) 'list)))
+    (coerce (uuid-get-namespace-bytes uuid) 'list)))
 
-(defclass fern ()
-  ((state :initarg :state
-     :accessor fern-state)
-    (trie
-      :initarg :trie     
-      :accessor fern-trie)
-    (seq :initform 0 :accessor fern-seq)
-    (fronding
-      :initarg :fronding
-      :accessor fern-fronding))   
-  (:default-initargs
-    :trie (make-trie)
-    :state (make-trie-remove-duplicate-state)
-    :fronding 128))
+(defstruct (fern (:include root-trie))
+  (state (make-trie-remove-duplicate-state)))
 
-(defun make-fern (&optional value (fronding 128))
-  (let ((f (make-instance 'fern :fronding fronding)))
-    (if value (set-trie-value f value))
-    f))
-  
-(defun fern ()
-  (or *fern* (setf *fern* (make-fern)))))
+(defstruct (root-fern (:include fern))
+  container)
 
+(defun make-new-root-fern (&optional (value 0))
+  (setf *fern* (make-root-fern :value value :purpose +null+ :up (arc +null+))))
+
+(defun make-new-fern (&optional (purpose (make-v4-uuid)) (value '*no-value*)
+                       (up (or *fern* (make-new-root-fern))))
+  (prog1 (setf (get-hybrid-trie (arc purpose) up)
+           (make-fern :value value :up up :purpose purpose))
+  (incf (hybrid-trie-value up)))) 
+
+(defun root-fern ()
+  (or *fern* (make-new-root-fern)))
+
+(define-symbol-macro ^^ (root-fern))
+
+#+()
 (defmethod print-object ((fern fern) stream)
   (print-unreadable-object (fern stream :type t)
     (format stream
@@ -54,8 +52,8 @@
       (trie-remove-duplicate-state-count (fern-state fern)))))
 
 (defun put (thing &optional value (fern (fern)))
-  (let ((val (setf (get-trie (arc thing) (fern-trie fern)) (or value thing))))
-    (cl:values (or value thing) thing (incf (fern-seq fern)))))
+  (let ((val (setf (get-trie (arc thing) (fern-trie fern)) (make-fern (or value thing)))))
+    (cl:values val thing (incf (fern-seq fern)))))
 
 (defun get (thing &optional (fern (fern)))
   (get-trie (arc thing) (fern-trie fern)))

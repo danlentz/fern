@@ -8,6 +8,8 @@
   :depends-on (:unicly)
   :components ((:file "package")
                 (:file "trie")
+                (:file "fern")
                 (:file "object")
-                (:file "fern")))
+                
+                ))
 
