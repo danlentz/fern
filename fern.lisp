@@ -36,7 +36,10 @@
 (defun root-fern ()
   (or *fern* (make-new-root-fern)))
 
-(define-symbol-macro ^^ (root-fern))
+(define-symbol-macro |<>| (root-fern))
+
+(defun |<>| (&rest args)
+  (apply #'make-new-fern args))
 
 #+()
 (defmethod print-object ((fern fern) stream)
