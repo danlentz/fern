@@ -3,13 +3,13 @@
 
 (in-package :cl-user)
 
+
 (asdf:defsystem :fern
   :serial t
   :depends-on (:unicly)
   :components ((:file "package")
                 (:file "trie")
                 (:file "fern")
-                (:file "object")
-                
-                ))
+                (:file "planks")
+                (:file "object")))
 

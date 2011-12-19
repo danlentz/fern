@@ -3,63 +3,131 @@
 
 (in-package :fern)
 
-
-(in-package :fern)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ferns proper
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defvar *fern* nil)
 
-(defparameter +url+             unicly:*UUID-NAMESPACE-URL*)
-(defparameter +dns+             unicly:*UUID-NAMESPACE-DNS*)
-(defparameter +x500+            unicly:*UUID-NAMESPACE-X500*)
-(defparameter +oid+             unicly:*UUID-NAMESPACE-OID*)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ARCs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defparameter +url+             unicly::*UUID-NAMESPACE-URL*)
+(defparameter +dns+             unicly::*UUID-NAMESPACE-DNS*)
+(defparameter +x500+            unicly::*UUID-NAMESPACE-X500*)
+(defparameter +oid+             unicly::*UUID-NAMESPACE-OID*)
 (defparameter +null+            unicly::*UUID-NULL-UUID*)
 
-(defgeneric arc (thing)  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defgeneric arc (thing)
+  (:method ((uuid integer))
+    (coerce (unicly::uuid-integer-128-to-byte-array uuid) 'list))
+  (:method ((uuid vector))
+    (coerce uuid 'list))
+  (:method ((uuid string))
+    (coerce (remove #\- uuid) 'list))
   (:method ((uuid unique-universal-identifier))
     (coerce (uuid-get-namespace-bytes uuid) 'list)))
 
-(defstruct (fern (:include root-trie))
-  (state (make-trie-remove-duplicate-state)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Well Known Reference Arcs
+;;
+;; (arc +null+) (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+;; (arc +url+)  (107 167 184 17 157 173 17 209 128 180 0 192 79 212 48 200)
+;; (arc +oid+)  (107 167 184 18 157 173 17 209 128 180 0 192 79 212 48 200)
+;; (arc +dns+)  (107 167 184 16 157 173 17 209 128 180 0 192 79 212 48 200)
+;; (arc +x500+) (107 167 184 20 157 173 17 209 128 180 0 192 79 212 48 200)
+;;
+;;; Integer-based ARCs allow sequential ordering and incremental
+;;; allocation of namespace
+;;
+;; (arc 0000) => (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+;; (arc 0001) => (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1)
+;; (arc 0002) => (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2)
+;; (arc 9999) => (0 0 0 0 0 0 0 0 0 0 0 0 0 0 39 15)
+;;
+;;; Bit Vectors can support maximal fan-out with minimization of storage
+;;; by use of delinearized *stash* 
+;;
+;; (arc (uuid-to-bit-vector +oid+))
+;; (0 1 1 0 1 0 1 1 1 0 1 0 0 1 1 1 1 0 1 1 1 0 0 0 0 0 0 1 0 0 1 0 1 0 0 1 1 1 0 1 1 0 1 0 1 1 0 1
+;;  0 0 0 1 0 0 0 1 1 1 0 1 0 0 0 1 1 0 0 0 0 0 0 0 1 0 1 1 0 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0
+;;  0 1 0 0 1 1 1 1 1 1 0 1 0 1 0 0 0 0 1 1 0 0 0 0 1 1 0 0 1 0 0 0)
+;;
+;; (arc (uuid-to-bit-vector +x500+))
+;; (0 1 1 0 1 0 1 1 1 0 1 0 0 1 1 1 1 0 1 1 1 0 0 0 0 0 0 1 0 1 0 0 1 0 0 1 1 1 0 1 1 0 1 0 1 1 0 1
+;;  0 0 0 1 0 0 0 1 1 1 0 1 0 0 0 1 1 0 0 0 0 0 0 0 1 0 1 1 0 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0
+;;  0 1 0 0 1 1 1 1 1 1 0 1 0 1 0 0 0 0 1 1 0 0 0 0 1 1 0 0 1 0 0 0)
+;;
+;;; i like this one:
+;;
+;; (arc (princ-to-string +x500+))
+;; (#\6 #\b #\a #\7 #\b #\8 #\1 #\4 #\9 #\d #\a #\d #\1 #\1 #\d #\1 #\8 #\0 #\b #\4 #\0 #\0 #\c
+;;  #\0 #\4 #\f #\d #\4 #\3 #\0 #\c #\8)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defstruct (root-fern (:include fern))
-  container)
 
-(defun make-new-root-fern (&optional (value 0))
-  (setf *fern* (make-root-fern :value value :purpose +null+ :up (arc +null+))))
+(defstruct (dynamic-state (:include trie-remove-duplicate-state)))
+(defstruct (fern          (:include dynamic-state)))
+(defstruct (root-fern     (:include root-structure-trie)))
 
-(defun make-new-fern (&optional (purpose (make-v4-uuid)) (value '*no-value*)
-                       (up (or *fern* (make-new-root-fern))))
-  (prog1 (setf (get-hybrid-trie (arc purpose) up)
-           (make-fern :value value :up up :purpose purpose))
-  (incf (hybrid-trie-value up)))) 
+(defun root-fern (&optional (purpose (short-site-name)))
+  (or (and (boundp '*fern*) (symbol-value '*fern*))
+    (setf (symbol-value '*fern*) (new-root-hybrid-trie purpose +NULL+))))
 
-(defun root-fern ()
-  (or *fern* (make-new-root-fern)))
-
-(define-symbol-macro |<>| (root-fern))
+(defun fern (&optional purpose (context (root-fern)))
+  (new-root-hybrid-trie (or purpose (princ-to-string (make-v4-uuid))) context))
 
 (defun |<>| (&rest args)
-  (apply #'make-new-fern args))
+  (apply #'fern args))
 
-#+()
+;; (<> (short-site-name))
+;;
+;; (defun make-new-root-fern (&optional (value 0) (context +url+) (up +null+))
+;; (make-root-fern :value value :purpose context :up up))
+;; (defun make-new-fern (&optional (value '*no-value*) (context (make-v4-uuid))
+;; (up +url+)  (make-fern))
+;; (defmethod print-object ((fern root-fern) stream)
+;; (print-unreadable-object (fern stream :type t)
+;; (format stream "~A :UP ~A" (princ-to-string (root-trie-purpose fern))
+;; (arc (root-trie-up fern)) )))
+
 (defmethod print-object ((fern fern) stream)
-  (print-unreadable-object (fern stream :type t)
-    (format stream
-      "[~d/~d] ~A ~A ARCS, ~d NODES, ~d ELEMENTS IN-STATE"
-      (fern-fronding  fern)
-      (fern-seq fern)
-      (trie-value (fern-trie fern))
-      (if (trie-arcs-hashed-p (fern-trie fern))
-        :HASHED (length (trie-arcs (fern-trie fern))))
-      (trie-node-count (fern-trie fern))
-      (trie-remove-duplicate-state-count (fern-state fern)))))
+  (print-unreadable-object (fern stream :type t)))
 
-(defun put (thing &optional value (fern (fern)))
-  (let ((val (setf (get-trie (arc thing) (fern-trie fern)) (make-fern (or value thing)))))
-    (cl:values val thing (incf (fern-seq fern)))))
+(defun make-frond-injector (fern)
+  "Given a FERN, return an injector function accepting KEY and VALUE."
+  (lambda (k v) (setf (get-hybrid-trie k fern) v)))
 
-(defun get (thing &optional (fern (fern)))
-  (get-trie (arc thing) (fern-trie fern)))
+(defmacro apply-key (key element)
+  `(if ,key (funcall ,key ,element)
+     ,element))
+
+(defmacro satisfies-the-test (elt)
+  (alexandria:with-gensyms (key-tmp)
+    `(let ((,key-tmp (apply-key key ,elt)))
+       (cond (testp (funcall test ,key-tmp))
+             (notp (not (funcall test-not ,key-tmp)))
+         (t t)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; General API / end-user interface
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun fern:put (arc value &optional (fern (root-fern)))
+  (let* ((frond  (new-root-hybrid-trie value fern))
+         (result (setf (get-hybrid-trie (arc arc) fern) frond)))
+    (cl:values result (arc arc) fern)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun fern:get (&optional (fern (fern)) arc)
+  (get-hybrid-trie (or arc +null+) fern))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun get* (thing &optional (fern (fern)))
   (get-trie-returning-node (arc thing) (fern-trie fern)))
