@@ -6,10 +6,14 @@
 
 (asdf:defsystem :fern
   :serial t
-  :depends-on (:unicly)
+  :depends-on (:unicly :planks :hh-redblack :clos-diff :contextl)
   :components ((:file "package")
                 (:file "trie")
                 (:file "fern")
+                (:file "lock")
+                (:file "streams")
                 (:file "planks")
+                (:file "context")
+                #+()
                 (:file "object")))
 

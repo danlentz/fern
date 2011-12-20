@@ -5,11 +5,12 @@
 (in-package :fern)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Memory Mapped Gray Streams
+;; Octets, Vectors, Buffers
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun make-buffer (size)
   (make-array size :element-type '(unsigned-byte 8)))
+
 
 (defun unsigned-byte-to-vector (unsigned-byte size)
   (let ((buffer (make-buffer size)))
@@ -18,11 +19,13 @@
                    (ldb (byte 8 (* i 8)) unsigned-byte)))
     buffer))
 
+
 (defun vector-to-unsigned-byte (vector size)
   (loop for i from 0 below size
         with n = 0
         do (setf n (dpb (aref vector i) (byte 8 (* i 8)) n))
         finally (return n)))
+
 
 (defun copy-sap-to-vector (sap sap-start vector vector-start length)
   (typecase vector
@@ -38,6 +41,7 @@
              do (setf (aref vector j)
                       (sb-sys:sap-ref-8 sap i))))))
 
+
 (defun copy-vector-to-sap (vector vector-start sap sap-start length)
   (typecase vector
     (simple-vector
@@ -52,27 +56,38 @@
              do (setf (sb-sys:sap-ref-8 sap j)
                       (aref vector i))))))
 
+
 (defun copy-sap-to-sap (sap-src sap-src-start sap-dest sap-dest-start length)
   (sb-sys::with-pinned-objects (sap-src sap-dest)
     (sb-kernel::system-area-ub8-copy sap-src sap-src-start
                                      sap-dest sap-dest-start
                                      length)))
 
+
 (defun string-to-octets (string)
   (sb-ext:string-to-octets string :external-format :utf-8))
+
 
 (defun octets-to-string (octets &key end)
   (sb-ext:octets-to-string octets :external-format :utf-8 :end end))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; memory mapped gray-streams
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (defclass mmap-stream (sb-gray:fundamental-binary-input-stream
                        sb-gray:fundamental-binary-output-stream)
-  ((base-stream :initarg :base-stream)
-   (mmap-size :initarg :mmap-size)
-   (file-length :initform 0)
-   (position :initform 0)
-   (sap :reader mmap-stream-sap)
-   (ext :initarg :ext :initform nil)
-   (lock :initform (make-recursive-spinlock))))
+  ((base-stream  :initarg :base-stream)
+    (mmap-size   :initarg :mmap-size)
+    (file-length :initform 0)
+    (position    :initform 0)
+    (sap         :reader mmap-stream-sap)
+    (ext         :initarg :ext :initform nil)
+    (lock        :initform (make-recursive-spinlock))))
+
 
 (defmethod initialize-instance :after ((stream mmap-stream) &key)
   (with-slots (base-stream file-length mmap-size sap) stream
@@ -84,15 +99,18 @@
                              (sb-sys:fd-stream-fd base-stream)
                              0))))
 
+
 (defmethod close ((stream mmap-stream) &key abort)
   (with-slots (base-stream mmap-size sap) stream
     (sb-posix:munmap sap mmap-size)
     (close base-stream :abort abort)))
 
+
 (defmethod stream-truncate ((stream mmap-stream) size)
   (with-slots (base-stream file-length) stream
     (setf file-length size)
     (sb-posix:ftruncate base-stream size)))
+
 
 (defmacro define-write-method (name
                                (&rest lambda-list)
@@ -125,6 +143,7 @@
              (setf position end-position)
              ,return-value))))))
 
+
 (defmacro define-read-method (name
                               (&rest lambda-list)
                               length
@@ -143,6 +162,7 @@
                      (t
                       ,cross-over-mmap-size))
              (incf position length)))))))
+
 
 (define-write-method sb-gray:stream-write-sequence ((stream mmap-stream)
                                                     (buffer sequence)
@@ -208,6 +228,7 @@
        (write-sequence buffer base-stream :start (1- mlen) :end ,size))
      integer))
 
+
 (defmacro define-read-unsigned-byte-method (name size)
   `(define-read-method ,name ((stream mmap-stream))
      ,size
@@ -222,6 +243,7 @@
        (file-position base-stream (1- mmap-size))
        (read-sequence buffer base-stream :start (1- mlen) :end ,size)
        (vector-to-unsigned-byte buffer ,size))))
+
 
 (define-write-unsigned-byte-method write-unsigned-byte-64 8)
 (define-write-unsigned-byte-method write-unsigned-byte-32 4)
@@ -249,6 +271,7 @@
        (with-recursive-spinlock (lock)
          (file-position stream position)
          ,@body))))
+
 
 (define-stream-at-method write-8-at  (integer) (write-byte integer stream))
 (define-stream-at-method write-16-at (integer) (write-unsigned-byte-16 integer stream))

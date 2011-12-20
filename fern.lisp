@@ -32,7 +32,7 @@
     (coerce (uuid-get-namespace-bytes uuid) 'list)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Well Known Reference Arcs
+;;; Well Known Reference Arcs (in "canonical" byte-array representation)
 ;;
 ;; (arc +null+) (0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
 ;; (arc +url+)  (107 167 184 17 157 173 17 209 128 180 0 192 79 212 48 200)
@@ -61,7 +61,8 @@
 ;;  0 0 0 1 0 0 0 1 1 1 0 1 0 0 0 1 1 0 0 0 0 0 0 0 1 0 1 1 0 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0
 ;;  0 1 0 0 1 1 1 1 1 1 0 1 0 1 0 0 0 0 1 1 0 0 0 0 1 1 0 0 1 0 0 0)
 ;;
-;;; i like this one:
+;;; this is a slightly inefficent encoding, but it provides a useful arc densitity in that
+;;; it will never require any hash based nodes. should be converted to nybble (4-bit hex)
 ;;
 ;; (arc (princ-to-string +x500+))
 ;; (#\6 #\b #\a #\7 #\b #\8 #\1 #\4 #\9 #\d #\a #\d #\1 #\1 #\d #\1 #\8 #\0 #\b #\4 #\0 #\0 #\c
@@ -71,15 +72,36 @@
 
 
 (defstruct (dynamic-state (:include trie-remove-duplicate-state)))
-(defstruct (fern          (:include dynamic-state)))
-(defstruct (root-fern     (:include root-structure-trie)))
+(defstruct (fern          (:include root-trie))
+  (local-state   (make-dynamic-state))
+  (compute-frond (list
+                              :byte-array  #'identity
+                              :bit-vector  #'uuid-to-bit-vector
+                              :hex-digit   #'princ-to-string
+                              :random-id   #'make-v4-uuid)))
+             
+(defstruct (root-fern     (:include fern))
+  container)
 
 (defun root-fern (&optional (purpose (short-site-name)))
   (or (and (boundp '*fern*) (symbol-value '*fern*))
-    (setf (symbol-value '*fern*) (new-root-hybrid-trie purpose +NULL+))))
+    (setf (symbol-value '*fern*) (make-root-fern :purpose purpose :up +url+))))
 
-(defun fern (&optional purpose (context (root-fern)))
-  (new-root-hybrid-trie (or purpose (princ-to-string (make-v4-uuid))) context))
+(defun fern (&optional purpose context)
+  (let* ((purpose (or purpose (princ-to-string (make-v4-uuid))))
+          (context (or context (root-fern)))
+          (parent-id (make-v5-uuid (root-trie-up context) (root-trie-purpose context)))
+          (local-id  (make-v5-uuid parent-id purpose))         
+          (baby (make-fern :up parent-id :purpose purpose)))
+    (set-hybrid-trie-value baby local-id)
+    (if (not (get-hybrid-trie (arc local-id) context))
+      (setf (get-hybrid-trie (arc local-id) context) baby))))
+
+;;      (set-hybrid-trie-value trie baby))
+;    trie))
+      
+
+(define-symbol-macro |<>| (root-fern))
 
 (defun |<>| (&rest args)
   (apply #'fern args))
@@ -90,13 +112,18 @@
 ;; (make-root-fern :value value :purpose context :up up))
 ;; (defun make-new-fern (&optional (value '*no-value*) (context (make-v4-uuid))
 ;; (up +url+)  (make-fern))
-;; (defmethod print-object ((fern root-fern) stream)
-;; (print-unreadable-object (fern stream :type t)
-;; (format stream "~A :UP ~A" (princ-to-string (root-trie-purpose fern))
-;; (arc (root-trie-up fern)) )))
 
-(defmethod print-object ((fern fern) stream)
-  (print-unreadable-object (fern stream :type t)))
+ (defmethod print-object ((fern root-fern) stream)
+   (print-unreadable-object (fern stream :type t)
+     (format stream "~A :UP ~A" (princ-to-string (root-trie-purpose fern)) nil)))
+
+ (defmethod print-object ((fern fern) stream)
+   (print-unreadable-object (fern stream :type t)
+     (format stream "~A :UP ~A" (princ-to-string (root-trie-purpose fern))
+       (root-trie-up fern))))
+  
+(defun list-all-root-ferns ()
+  (hybrid-trie-all-values (root-fern)))
 
 (defun make-frond-injector (fern)
   "Given a FERN, return an injector function accepting KEY and VALUE."

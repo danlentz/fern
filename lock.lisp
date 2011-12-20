@@ -4,14 +4,14 @@
 (in-package :fern)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; spinlocks
+;; spin-locks
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun make-spinlock ()
   (cons nil nil))
 
 (defun lock-spinlock (spinlock)
-  (loop while (sb-ext:compare-and-swap (car spinlock) nil t)))
+  (loop while (SB-EXT:COMPARE-AND-SWAP (car spinlock) nil t)))
 
 (defun unlock-spinlock (spinlock)
   (setf (car spinlock) nil))
@@ -28,8 +28,8 @@
   (cons nil 0))
 
 (defun lock-recursive-spinlock (recursive-spinlock)
-  (loop with self = sb-thread:*current-thread*
-    for ret = (sb-ext:compare-and-swap (car recursive-spinlock) nil self)
+  (loop with self = SB-THREAD:*CURRENT-THREAD*
+    for ret = (SB-EXT:COMPARE-AND-SWAP (car recursive-spinlock) nil self)
         until (or (null ret) (eq ret self))
         finally (incf (cdr recursive-spinlock))))
 

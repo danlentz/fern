@@ -4,12 +4,15 @@
 (in-package :fern)
 
 (arnesi:eval-always 
-  (ql:quickload :hh-redblack)
-  (ql:quickload :planks)
+  (ql:quickload   :hh-redblack)
+  (ql:quickload   :planks)
+  (rename-package :planks.btree :planks '(:planks.btree))
   (use-package  (rename-package :hh-redblack :hh-redblack '(:hh)) :fern))
+
 
 (defun blank-identity ()
   (princ-to-string (make-v4-uuid)))
+
 
 (defun btree-list ()
   (let (trees)
@@ -17,9 +20,23 @@
       planks.btree::*btrees*)
     trees))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; BTREE-CLASS: light-weight metaobject managed persistence
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; persistent-heap-storage-btree 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (defun ensure-btree (btree-pathname &rest args)
   (unless (probe-file btree-pathname)
     (apply #'planks.btree:make-btree (push btree-pathname args))))
+
 
 
 (defun ensure-heap (btree-pathname &rest args)
@@ -39,8 +56,9 @@
     :key-type   'fixnum
     :key<       '<
     :key=       'eql
-    :value-type 'list
+    :value-type '(vector (4))
     :value=     'equalp))
+
 
 (defmethod print-object ((btree persistent-heap-storage-btree) stream)
   (with-slots (planks.btree::pathname planks.btree::heap-size planks.btree::heap-start
@@ -50,8 +68,10 @@
         planks.btree::pathname planks.btree::heap-size planks.btree::heap-start
         planks.btree::free-space-start))))
 
-(define-symbol-macro |heap| (ensure-heap "heap.btree"))
-  
+
+;; (define-symbol-macro |heap| (ensure-heap "heap.btree"))
+
+
 (defclass memory-mapped-red-black-tree (hh::memory-persistent-red-black-tree)
   ((pathname
      :initarg :pathname
@@ -164,3 +184,4 @@
 ;;          nil)))
 
 
+(planks:map-btree (planks:find-btree "rbtree") #'(lambda (k v) (format t "~a  => ~a~%" k v)))
