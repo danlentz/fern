@@ -2,7 +2,7 @@
 ;;;
 ;;; Adapted from apparently dormant github project  quek/rucksack-mmap
 
-(in-package :fern)
+(in-package :planks.btree)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Octets, Vectors, Buffers
@@ -259,11 +259,13 @@
       (file-position stream position)
       (read-sequence sequence stream :start start :end end))))
 
+
 (defmethod write-seq-at (stream sequence position &key (start 0) end)
   (with-slots (lock) stream
     (with-recursive-spinlock (lock)
       (file-position stream position)
       (write-sequence sequence stream :start start :end end))))
+
 
 (defmacro define-stream-at-method (name (&rest args) &body body)
   `(defmethod ,name (stream position ,@args)
@@ -282,6 +284,7 @@
 (define-stream-at-method read-32-at () (read-unsigned-byte-32 stream))
 (define-stream-at-method read-64-at () (read-unsigned-byte-64 stream))
 
+
 (defmethod sb-gray:stream-file-position ((stream mmap-stream) &optional position-spec)
   (with-slots (base-stream position) stream
     (if position-spec
@@ -299,12 +302,14 @@
   (with-slots (file-length) stream
     file-length))
 
+
 (defgeneric stream-pathname (stream)
   (:method ((stream mmap-stream))
     (with-slots (base-stream) stream
       (pathname base-stream)))
   (:method (stream)
       (pathname stream)))
+
 
 (defun open-mmap-stream (path mmap-size &optional (extend 1.5))
   (make-instance 'mmap-stream
