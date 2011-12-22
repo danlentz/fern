@@ -4,15 +4,20 @@
 (in-package :fern)
 
 (arnesi:eval-always 
-  (ql:quickload   :hh-redblack)
-  (ql:quickload   :planks)
-  (rename-package :planks.btree :planks '(:planks.btree))
-  (use-package  (rename-package :hh-redblack :hh-redblack '(:hh)) :fern))
+  (use-package  (rename-package :planks.btree :planks '(:planks.btree)) :fern)
+  (use-package  (rename-package :hh-redblack :hh-redblack '(:hh))       :fern))
 
+(defvar *default-btree-forest-pathname* (merge-pathnames #P"graph/"
+                                          (user-homedir-pathname)
+(defun anonymous ()
+  (make-v4-uuid))
 
+(defun anonymous-namestring ()
+  (princ-to-string (anonymous)))
+
+#+deprecated
 (defun blank-identity ()
   (princ-to-string (make-v4-uuid)))
-
 
 (defun btree-list ()
   (let (trees)
@@ -20,6 +25,12 @@
       planks.btree::*btrees*)
     trees))
 
+(defun ensure-btree (btree-pathname &rest args)
+  (unless (probe-file btree-pathname)
+    (apply #'planks.btree:make-btree (push btree-pathname args))))
+
+(defun anonymous-btree (&rest args)
+  (apply #'ensure-btree (anonymous-namestring) args))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; BTREE-CLASS: light-weight metaobject managed persistence
@@ -33,21 +44,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(defun ensure-btree (btree-pathname &rest args)
-  (unless (probe-file btree-pathname)
-    (apply #'planks.btree:make-btree (push btree-pathname args))))
-
-
-
-(defun ensure-heap (btree-pathname &rest args)
-  (let ((btree-pathname (or btree-pathname (blank-identity))))      
-    (if (probe-file btree-pathname)
-      (planks.btree:find-btree
-        btree-pathname)
-      (apply #'planks.btree:make-btree
-        (append (list btree-pathname :class 'persistent-heap-storage-btree) args)))))
-
-
 (defclass persistent-heap-storage-btree (planks.btree:heap-btree)
   ()
   (:default-initargs
@@ -58,6 +54,15 @@
     :key=       'eql
     :value-type '(vector (4))
     :value=     'equalp))
+
+
+(defun ensure-heap (btree-pathname &rest args)
+  (let ((btree-pathname (or btree-pathname (anonymous-namestring))))
+    (if (probe-file btree-pathname)
+      (planks.btree:find-btree
+        btree-pathname)
+      (apply #'planks.btree:make-btree btree-pathname
+        (append args (list :class 'persistent-heap-storage-btree))))))
 
 
 (defmethod print-object ((btree persistent-heap-storage-btree) stream)
