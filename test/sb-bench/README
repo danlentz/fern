@@ -1,6 +1,0 @@
-SB-BENCH
-
-A work-in-progress benchmarking framework for SBCL.
-
-Intended primary user is SBCL itself, but the framework should be
-usable by others as well. The plan is to make this an SBCL contrib.
