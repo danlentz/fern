@@ -1,11 +1,15 @@
 ;;;;; -*- mode: common-lisp;   common-lisp-style: modern;    coding: utf-8; -*-
 
 (defpackage :fern/test
-  (:use :common-lisp :hu.dwim.stefil :alexandria))
+  (:use :common-lisp :hu.dwim.stefil :alexandria)
+  (:export :run-all-tests :fern))
 
 (in-package :fern/test)
 
-(defsuite* (fern :in fern))
+(defsuite* (fern.test :in root-suite))
+
+(defun run-all-tests ()
+  (funcall-test-with-feedback-message 'fern.test))
 
 (defparameter *fern* nil)
 
@@ -91,85 +95,5 @@
                      for j from 10 downto 1
                      do (setf (fern:get i x) j)
                       collect (cons i j))))
-    (is (equal (fern:vals x) (mapcar #'cdr pairs)))
-    (is (equal (fern:keys x) (mapcar #'car pairs)))))
-
-#|
-
-(defun trietst (list &key (max (length list)) (check :after) (trace nil) (map nil) (keep nil))
-  (ecase check
-    (:after)
-    (:during)
-    ((nil)))
-  ;; touch the list
-  ;;(loop for x in list do (length x))
-  (let ((some-trie (fern:make-trie)))
-    (when keep (setq *trie* some-trie))
-    (time
-     (loop for clause in list
-	   for i from 0 below max
-	   for trie = (fern::find-trie clause t nil some-trie)
-	   do
-	   ;;(user::pp clause)
-	   ;;(user::pp some-trie)
-	   (when trace
-	     (print "Looking for:") (pprint clause)
-	     (print "Found:")	    (pprint trie))
-	   (fern::set-trie-value trie
-			         (if (eql (fern::trie-value trie) fern:+no-value+)
-			       (list i)
-			       (cons i (fern::trie-value trie))))
-	   (when trace
-	     (print "After inserting")
-	     (pprint some-trie))
-	   when (= (mod i 50) 1) do (princ ".")))
-    (when (eq check :after)
-      (time
-      (loop for x in list
-	    for i from 0 below max
-	    for trie = (find-trie x nil nil some-trie)
-	    when (= (mod i 50) 1) do (princ "c")
-	    unless (member i (trie-value trie))
-	    do (break
-		"Expected ~s. Vals = ~s.  Did not find expected value for ~s"
-		i (trie-value trie) x))))
-    (when map
-      (let ((keys nil)
-            (vals nil))
-        (maptrie #'(lambda (k v) (push k keys)(push v vals))
-               some-trie)
-        (loop
-         for k in keys
-         for v in vals
-         for trie = (find-trie k nil nil some-trie)
-         do (assert trie)
-         (assert (eq (trie-value trie) v)))
-	(when (not (set-equal keys (subseq list 0 max) :test #'equal))
-	  (map nil #'pp keys)(break))))
-    (trie-node-count some-trie)
-    ))
-
-
-;; things that triggerd bugs:
-(trietst '(
-	   (=> a)
-	   (=> a b c)
-	   (=> a (b c))
-	   (=> a (b c) (d e) (f g))
-	   (=> (b c))))
-;; requires stashing a stash
-(trietst '((a (b (c) (d))) (a (b f))))
-
-(defun set-equal (x y &key (test #'eql))
-  (and (subsetp x y :test test)
-       (subsetp y x :test test)))
-
-(defun trie-dbg (list indices &rest trietst-keys)
-  (apply 'trietst
-	 (loop for (lo hi) in indices
-	       append (subseq list lo hi)) trietst-keys))
-
-
-
-
-
+    (is (equal (fern::vals x) (mapcar #'cdr pairs)))
+    (is (equal (fern::keys x) (mapcar #'car pairs)))))
