@@ -1,7 +1,7 @@
 some modernization and decrufting of an interesting data structure developed by the OKBC project: an efficient, 
 self-adjusting key-value trie-index abstraction for sparse tuple spaces.
 
-I call them ferns because that's how they look to _me_, with fronds that sort of "unroll"
+I call them ferns because that's how they look to me, with fronds that sort of unfurl
 
 the hope is to spend some more time working on documentation and tests, but, for now, this is should
 be a working minimal standalone system
